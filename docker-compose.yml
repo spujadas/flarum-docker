@@ -1,0 +1,7 @@
+flarum:
+  build: flarum
+  ports:
+    - "80:80"
+    - "3306:3306"
+  volumes:
+    - /var/www:/var/project
