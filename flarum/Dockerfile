@@ -49,13 +49,6 @@ RUN sed -i.bak -f /etc/php5/fpm/pool.d/www.conf.sed /etc/php5/fpm/pool.d/www.con
 ADD xdebug.ini /etc/php5/mods-available/xdebug.ini
 
 
-### create and expose working directory
-RUN mkdir /var/project
-VOLUME [ "/var/project" ]
-
-WORKDIR /var/project
-
-
 ###############################################################################
 #                                  nginx
 ###############################################################################
@@ -162,45 +155,55 @@ RUN curl -sS https://getcomposer.org/installer | php \
 #                                   Flarum
 ###############################################################################
 
+# prerequisites
 RUN apt-get install -qqy phantomjs zsh exuberant-ctags
 
 RUN . ~/.nvm/nvm.sh \
 	&& npm install -g bower ember
 
-RUN cd /opt \
-	&& git clone https://github.com/flarum/flarum \
-	&& cp /opt/flarum/.env.example /opt/flarum/.env
+ENV FLARUM_ROOT /opt/flarum
 
-RUN service mysql start \
-	&& mysqladmin --silent --wait=30 ping \
-	&& mysql -u root -proot -e 'create database flarum' \
-	&& sleep 1 \
-	&& service mysql stop
+# download skeleton Laravel app
+RUN mkdir -p ${FLARUM_ROOT} \
+	&& cd ${FLARUM_ROOT} \
+	&& git clone https://github.com/flarum/flarum .
 
-RUN mkdir -p /opt/flarum/flarum/core \
-	&& cd /opt/flarum/flarum/core \
+# download core app
+RUN mkdir -p ${FLARUM_ROOT}/flarum/core \
+	&& cd ${FLARUM_ROOT}/flarum/core \
 	&& git clone https://github.com/flarum/core . \
-	&& cd /opt/flarum/flarum/core \
-	&& composer install --prefer-dist \
 	&& mkdir public
 
-RUN cd /opt/flarum/flarum/core/ember \
+# install core app PHP dependencies
+RUN cd ${FLARUM_ROOT}/flarum/core \
+	&& composer install --prefer-dist
+
+# install core app JS dependencies
+RUN cd ${FLARUM_ROOT}/flarum/core/ember \
 	&& . ~/.nvm/nvm.sh \
 	&& npm install \
 	&& bower --allow-root install
 
-RUN cd /opt/flarum \
-	&& composer install --prefer-dist \
-	&& service mysql start \
+# install skeleton app dependencies
+RUN cd ${FLARUM_ROOT} \
+	&& cp ${FLARUM_ROOT}/.env.example ${FLARUM_ROOT}/.env \
+	&& composer install --prefer-dist
+
+# create database, run installation migrations and seeds, seed database with fake data
+RUN service mysql start \
 	&& mysqladmin --silent --wait=30 ping \
+	&& mysql -u root -proot -e 'create database flarum' \
+	&& cd ${FLARUM_ROOT} \
 	&& php artisan flarum:install \
 	&& php artisan flarum:seed \
 	&& sleep 1 \
 	&& service mysql stop
 
-RUN chown -R www-data /opt/flarum
+RUN chown -R www-data ${FLARUM_ROOT}
 
-EXPOSE 80 3306
+EXPOSE 80
+WORKDIR ${FLARUM_ROOT}
+
 ADD ./start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh
 CMD [ "/usr/local/bin/start.sh" ]
