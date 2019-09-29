@@ -1,4 +1,4 @@
-# Flarum Docker image
+# Flarum Docker image [UNMAINTAINED]
 
 [Flarum](http://flarum.org/) is an open source forum web application written in PHP ([Laravel](http://laravel.com)) and JavaScript ([Mithril](https://lhorie.github.io/mithril/)).
 
